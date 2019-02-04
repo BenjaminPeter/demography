@@ -141,12 +141,12 @@ if __name__ == "__main__":
     parser.add_argument("--nafrB", type=int, default=2,
                         help="Number of AfrA chromosomes to simulate")
 
-    parser.add_argument("--dump-snps", action="store_true", help="Save all SNPs to a file")
+    parser.add_argument("--snps", action="store_true", help="Save all SNPs to a file")
     parser.add_argument("--stats", nargs="+",
                         choices=["true_neand", "asc_neand", "indirect", "direct", "afr_f4"],
                         help="Which statistics to calculate?")
 
-    parser.add_argument("--output", metavar="FILE", help="Output filename")
+    parser.add_argument("--output-prefix", metavar="FILE", help="Prefix of output files")
 
     parser.add_argument("--debug", action="store_true", help="Debug info")
 
@@ -175,12 +175,10 @@ if __name__ == "__main__":
     # process the simulations into different tables of SNPs
     all_snps = sim.get_all_snps(ts, sim.all_inds(pop_params))
 
-    if not args.output:
-        args.output = sys.stdout
+    if args.snps:
+        all_snps.to_csv(f"{args.output_prefix}_snps.tsv", sep="\t", index=False)
 
-    if args.dump_snps:
-        all_snps.to_csv(args.output, sep="\t", index=False)
-    else:
+    if args.stats:
         # calculate admixture statistics and bind them into a DataFrame
         afrA = [f"afrA{i}" for i in range(args.nafrA)]
         afrB = [f"afrB{i}" for i in range(args.nafrB)]
@@ -191,14 +189,14 @@ if __name__ == "__main__":
 
         df = defaultdict(list)
         for s in samples.name:
-            if "true_neand"  in args.stats: df["true_neand"].append(true_snps[s].mean())
-            if "asc_neand" in args.stats: df["asc_neand"].append((admix_snps[s] == admix_snps[altai[0]]).mean())
-            if "direct"    in args.stats: df["direct"].append(stats.f4ratio(all_snps, s, a=altai, b=vindija, c=afrA, o="chimp0"))
-            if "indirect"  in args.stats: df["indirect"].append(1 - stats.f4ratio(all_snps, s, a=afrA, b=afrB, c=altai, o="chimp0"))
-            if "afr_f4"    in args.stats: df["afr_f4"].append((1 / len(all_snps)) * stats.f4(all_snps, w="eur0", x=s, y=afrA, z="chimp0") if s != "eur0" else "NA")
+            if "true_neand" in args.stats: df["true_neand"].append(true_snps[s].mean())
+            if "asc_neand"  in args.stats: df["asc_neand"].append((admix_snps[s] == admix_snps[altai[0]]).mean())
+            if "direct"     in args.stats: df["direct"].append(stats.f4ratio(all_snps, s, a=altai, b=vindija, c=afrA, o="chimp0"))
+            if "indirect"   in args.stats: df["indirect"].append(1 - stats.f4ratio(all_snps, s, a=afrA, b=afrB, c=altai, o="chimp0"))
+            if "afr_f4"     in args.stats: df["afr_f4"].append((1 / len(all_snps)) * stats.f4(all_snps, w="eur0", x=s, y=afrA, z="chimp0") if s != "eur0" else "NA")
         df = pd.DataFrame(df)
         df["name"] = samples.name
 
         final_df = pd.merge(samples, df, on="name")
 
-        final_df.to_csv(args.output, sep="\t", index=False)
+        final_df.to_csv(f"{args.output_prefix}_stats.tsv", sep="\t", index=False)

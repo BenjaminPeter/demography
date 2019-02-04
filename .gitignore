@@ -1,5 +1,4 @@
 sim/__pycache__/*
 .python-version
 .ipynb_checkpoints/
-*.tsv
 tmp/

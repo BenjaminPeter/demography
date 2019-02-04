@@ -136,7 +136,7 @@ if __name__ == "__main__":
                         help="Number of European chromosomes to simulate")
     parser.add_argument("--nasn", type=int, default=0,
                         help="Number of Asian chromosomes to simulate")
-    parser.add_argument("--nafrA", type=int, default=200,
+    parser.add_argument("--nafrA", type=int, default=2,
                         help="Number of AfrB chromosomes to simulate")
     parser.add_argument("--nafrB", type=int, default=2,
                         help="Number of AfrA chromosomes to simulate")
@@ -161,8 +161,8 @@ if __name__ == "__main__":
         "neand":  {"id": 1, "Ne": 1000,  "t_sample": neand_ages, "t_split": 600_000},
         "afrA": {"id": 2, "Ne": args.Ne_afr, "t_sample": args.nafrA * [0]},
         "afrB": {"id": 3, "Ne": args.Ne_afr, "t_sample": args.nafrB * [0], "t_split": 150_000},
-        "eur": {"id": 4, "Ne": args.Ne_nonafr,  "t_sample": eur_ages, "t_split": 70_000, "t_bottle": 10000, "Ne_bottle": 2000},
-        "asn": {"id": 5, "Ne": args.Ne_nonafr,  "t_sample": asn_ages, "t_split": 45_000},
+        "eur": {"id": 4, "Ne": args.Ne_nonafr, "t_sample": eur_ages, "t_split": 70_000, "t_bottle": 10000, "Ne_bottle": 2000},
+        "asn": {"id": 5, "Ne": args.Ne_nonafr, "t_sample": asn_ages, "t_split": 45_000},
     }
 
     # prepare all simulation parameters

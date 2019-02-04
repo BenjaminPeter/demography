@@ -1,3 +1,4 @@
 sim/__pycache__/*
 .python-version
-example*
+.ipynb_checkpoints/
+*.tsv

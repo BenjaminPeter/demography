@@ -7,7 +7,7 @@ from collections import defaultdict
 import msprime as msp
 import pandas as pd
 
-from sim import stats, sim
+from sim import stats, sim, introgression
 
 
 def sample_ages(ages):
@@ -108,6 +108,17 @@ def geneflow_type(arg):
     return int(args[0]), int(args[1]), float(args[2]), float(args[3])
 
 
+def pair_type(arg):
+    pops = ["chimp", "afrA", "afrB", "eur", "asn", "neand"]
+    args = arg.split("-")
+    if len(args) != 2:
+        raise argparse.ArgumentTypeError("Two populations have to be specified")
+    if args[0] not in pops or args[1] not in pops:
+        raise argparse.ArgumentTypeError("Invalid population specified")
+    return args
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -137,10 +148,12 @@ if __name__ == "__main__":
     parser.add_argument("--nasn", type=int, default=0,
                         help="Number of Asian chromosomes to simulate")
     parser.add_argument("--nafrA", type=int, default=2,
-                        help="Number of AfrB chromosomes to simulate")
-    parser.add_argument("--nafrB", type=int, default=2,
                         help="Number of AfrA chromosomes to simulate")
+    parser.add_argument("--nafrB", type=int, default=2,
+                        help="Number of AfrB chromosomes to simulate")
 
+    parser.add_argument("--introgression", type=pair_type, metavar="from-to",
+                        help="Pair of populations for introgression detection")
     parser.add_argument("--snps", action="store_true", help="Save all SNPs to a file")
     parser.add_argument("--stats", nargs="+",
                         choices=["true_neand", "asc_neand", "indirect", "direct", "afr_f4"],
@@ -176,7 +189,18 @@ if __name__ == "__main__":
     all_snps = sim.get_all_snps(ts, sim.all_inds(pop_params))
 
     if args.snps:
-        all_snps.to_csv(f"{args.output_prefix}_snps.tsv", sep="\t", index=False)
+        all_snps.to_csv(f"{args.output_prefix}_snps.tsv", sep="\t", index_label="pos")
+
+    if args.introgression:
+        haplotypes = introgression.get_introgressed(
+            ts,
+            from_pop=pop_params[args.introgression[0]]["id"],
+            to_pop=pop_params[args.introgression[1]]["id"]
+        )
+        source_pop, target_pop = args.introgression
+        ind_ids = [f"{target_pop}{i}" for i, _ in enumerate(ts.samples(pop_params[target_pop]["id"]))]
+        for i, name in zip(haplotypes.keys(), ind_ids):
+            haplotypes[i].to_csv(f"{args.output_prefix}_{name}_{source_pop}_haplotypes.tsv", sep="\t", index=False)
 
     if args.stats:
         # calculate admixture statistics and bind them into a DataFrame

@@ -23,7 +23,9 @@ def get_introgressed(ts, from_pop, to_pop):
                 for leaf in tree.leaves(migr.node):
                     if leaf in source_inds:
                         segments[leaf].append(interval)
-    segments = {ind: merge_segments(segments[ind]) for ind in source_inds}
+
+    if segments:
+        segments = {ind: merge_segments(segments[ind]) for ind in segments.keys()}
 
     return segments
 

@@ -115,7 +115,7 @@ def pair_type(arg):
         raise argparse.ArgumentTypeError("Two populations have to be specified")
     if args[0] not in pops or args[1] not in pops:
         raise argparse.ArgumentTypeError("Invalid population specified")
-    return args
+    return tuple(args)
 
 
 
@@ -152,8 +152,8 @@ if __name__ == "__main__":
     parser.add_argument("--nafrB", type=int, default=2,
                         help="Number of AfrB chromosomes to simulate")
 
-    parser.add_argument("--introgression", type=pair_type, metavar="from-to",
-                        help="Pair of populations for introgression detection")
+    parser.add_argument("--introgression", nargs="*", type=pair_type, metavar="from-to",
+                        help="Pairs of populations for introgression detection")
     parser.add_argument("--snps", action="store_true", help="Save all SNPs to a file")
     parser.add_argument("--stats", nargs="+",
                         choices=["true_neand", "asc_neand", "indirect", "direct", "afr_f4"],
@@ -188,22 +188,26 @@ if __name__ == "__main__":
     # process the simulations into different tables of SNPs
     all_snps = sim.get_all_snps(ts, sim.all_inds(pop_params))
 
+    # save all simulated SNPs in a tabular format
     if args.snps:
         all_snps.to_csv(f"{args.output_prefix}_snps.tsv", sep="\t", index_label="pos")
 
-    if args.introgression:
+    # detect admixture tracts for each pair of source-target populations
+    for from_pop, to_pop in args.introgression:
         haplotypes = introgression.get_introgressed(
             ts,
-            from_pop=pop_params[args.introgression[0]]["id"],
-            to_pop=pop_params[args.introgression[1]]["id"]
+            from_pop=pop_params[from_pop]["id"],
+            to_pop=pop_params[to_pop]["id"]
         )
-        source_pop, target_pop = args.introgression
-        ind_ids = [f"{target_pop}{i}" for i, _ in enumerate(ts.samples(pop_params[target_pop]["id"]))]
-        for i, name in zip(haplotypes.keys(), ind_ids):
-            haplotypes[i].to_csv(f"{args.output_prefix}_{name}_{source_pop}_haplotypes.tsv", sep="\t", index=False)
 
+        if not haplotypes: continue
+
+        ind_ids = [f"{to_pop}{i}" for i, _ in enumerate(ts.samples(pop_params[to_pop]["id"]))]
+        for i, name in zip(haplotypes.keys(), ind_ids):
+            haplotypes[i].to_csv(f"{args.output_prefix}_{name}_{from_pop}_haplotypes.tsv", sep="\t", index=False)
+
+    # calculate a specified set of admixture statistics
     if args.stats:
-        # calculate admixture statistics and bind them into a DataFrame
         afrA = [f"afrA{i}" for i in range(args.nafrA)]
         afrB = [f"afrB{i}" for i in range(args.nafrB)]
         altai, chag, vindija = ["neand0", "neand1"], ["neand2", "neand3"], ["neand4", "neand5"]

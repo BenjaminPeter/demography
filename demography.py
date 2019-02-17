@@ -4,13 +4,13 @@ import argparse
 import sys
 from collections import defaultdict
 
+import numpy as np
 import msprime as msp
 import pandas as pd
-import numpy as np
-from scipy.stats import binom, poisson
 
 from sim import stats, sim, introgression
 from sim.admixfrog import admixfrog_input, admixfrog_sample
+from sim.admixfrog import debug_str
 
 
 def sample_ages(ages):
@@ -179,8 +179,8 @@ if __name__ == "__main__":
     afparse.add_argument("--contamination", nargs="*", type=float,
                         help="proportion of reads that are of contaminant origin")
 
-    #args = parser.parse_args(debug_str)
-    args = parser.parse_args()
+    args = parser.parse_args(debug_str)
+    #args = parser.parse_args()
 
 
     neand_ages = 2 * [125000] + 2 * [90000] + 2 * [55000]

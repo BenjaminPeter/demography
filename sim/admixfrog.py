@@ -1,3 +1,6 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import binom, poisson
 def admixfrog_input(snps, coverage, contamination, prefix='admixfrog'):
     snps['pos'] = snps.index.astype(int)
     snps2 = snps.drop_duplicates(subset=['pos'])
@@ -41,10 +44,9 @@ def admixfrog_input(snps, coverage, contamination, prefix='admixfrog'):
 
 
 def admixfrog_sample(ids, ref, snps2, coverage, contamination, libs, name, prefix):
-    print(f"samples {i}, {ids}")
     S = []
     for cov, cont, lib in zip(coverage, contamination, libs):
-        print(f'Sample{i}\tLib:{lib}\tCov:{cov}\tcont:{cont}', end="\t")
+        print(f'Sample{name}\tLib:{lib}\tCov:{cov}\tcont:{cont}', end="\t")
         data = ref[['chrom', 'pos', 'map']].copy()
         print(f'{list(snps2[ids].columns)}')
         data['true_alt'] = np.sum(snps2[ids],1)
@@ -76,7 +78,7 @@ def admixfrog_sample(ids, ref, snps2, coverage, contamination, libs, name, prefi
 debug_str = ""\
 "--neand 55000,25,0,0.03 "\
 "--eur-ages 45000 45000 40000 40000 30000 30000 "\
-"--seq-len 10_000_000 "\
+"--seq-len 5_000_000 "\
 "--stats true_neand "\
 "--introgression neand-eur "\
 "--nafrA 40 "\

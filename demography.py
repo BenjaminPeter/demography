@@ -10,76 +10,7 @@ import numpy as np
 from scipy.stats import binom, poisson
 
 from sim import stats, sim, introgression
-
-debug_str = ""\
-"--neand 55000,25,0,0.03 "\
-"--eur-ages 45000 45000 40000 40000 30000 30000 "\
-"--seq-len 20_000_000 "\
-"--stats true_neand "\
-"--introgression neand-eur "\
-"--nafrA 40 "\
-"--nafrB 20 "\
-"--nasn 20 "\
-"--snps "\
-"--admixfrog "\
-"--coverage .1 .2 2.5 "\
-"--contamination .01 .2 .5 "\
-"--output-prefix tmp/test".split()
-
-
-def admixfrog_input(snps, coverage, contamination, prefix='admixfrog'):
-    snps['pos'] = snps.index.astype(int)
-    snps2 = snps.drop_duplicates(subset=['pos'])
-    afr_cols = [col for col in snps2.columns if col.startswith("afr")] 
-    asn_cols = [col for col in snps2.columns if col.startswith("asn")] 
-    eur_cols = [col for col in snps2.columns if col.startswith("eur")] 
-    n_afr, n_asn, n_eur = len(afr_cols), len(asn_cols), len(eur_cols)
-    D = dict()
-    D['chrom'] = '1'
-    D['pos']=snps2.index.astype(int)
-    D['map']=snps2.index / 1e6
-    D['ref']='A'
-    D['alt']='G'
-    D["AFR_alt"] = np.sum(snps2[afr_cols], 1)
-    D["AFR_ref"] = n_afr - D['AFR_alt']
-    D["ALT_alt"] = snps2.neand0 + snps2.neand1
-    D["CHA_alt"] = snps2.neand2 + snps2.neand3
-    D["VIN_alt"] = snps2.neand4 + snps2.neand5
-    D["ALT_ref"] = 2 - D['ALT_alt']
-    D["CHA_ref"] = 2 - D['CHA_alt']
-    D["VIN_ref"] = 2 - D['VIN_alt']
-    D["PAN_alt"] = snps2.chimp0 * 2
-    D["PAN_ref"] = 2 - D['PAN_alt']
-
-    if n_asn:
-        D["ASN_alt"] = np.sum(snps2[asn_cols], 1)
-        D["ASN_ref"] = n_asn - D['ASN_alt']
-    ref = pd.DataFrame.from_dict(D)
-    ref.to_csv(f"{prefix}.panel.xz", float_format="%.5f", index=False, compression="xz")
-
-    n_libs = len(coverage)
-    assert len(contamination) == n_libs
-    n_samples = int(n_eur / 2)
-    libs = [f"lib{i}" for i in range(n_libs)]
-
-    for i in range(n_samples):
-        ids = eur_cols[slice(2*i, 2*(i+1))]
-        print(f"samples {i}, {ids}")
-        S = []
-        for cov, cont, lib in zip(coverage, contamination, libs):
-            print(f'Sample{i}\tLib:{lib}\tCov:{cov}\tcont:{cont}')
-            data = ref[['chrom', 'pos', 'map']].copy()
-            data['true_alt'] = np.sum(snps2[ids],1)
-            data['true_ref'] = 2 - data['true_alt']
-            data['lib'] = lib
-            data['talt'] = poisson.rvs(data['true_alt']/2 * cov * ( 1 - cont) ) +\
-                poisson.rvs(ref.AFR_alt/n_afr * cov * cont )
-            data['tref'] = poisson.rvs(data['true_ref']/2 * cov * ( 1 - cont) ) +\
-                poisson.rvs(ref.AFR_ref/n_afr * cov * cont )
-            data = data[data.tref+data.talt>0]
-            S.append(data)
-        data = pd.concat(S).sort_values(['chrom', 'pos', 'map', 'lib'])
-        data.to_csv(f"{prefix}.sample{i}.xz", float_format="%.5f", index=False, compression="xz")
+from sim.admixfrog import admixfrog_input, admixfrog_sample
 
 
 def sample_ages(ages):
@@ -190,7 +121,6 @@ def pair_type(arg):
     return tuple(args)
 
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -232,6 +162,8 @@ if __name__ == "__main__":
                         help="Which statistics to calculate?")
 
     parser.add_argument("--output-prefix", metavar="FILE", help="Prefix of output files")
+    parser.add_argument("--vcf", action='store_true', default=False, help="write vcf file with ploidy VCF")
+    parser.add_argument("--vcf-ploidy", type=int, default=2, help="ploidy for vcf")
 
     parser.add_argument("--debug", action="store_true", help="Debug info")
     afparse = parser.add_argument_group('admixfrog', """options for admixfrog output.
@@ -247,8 +179,8 @@ if __name__ == "__main__":
     afparse.add_argument("--contamination", nargs="*", type=float,
                         help="proportion of reads that are of contaminant origin")
 
-    args = parser.parse_args(debug_str)
-    #args = parser.parse_args()
+    #args = parser.parse_args(debug_str)
+    args = parser.parse_args()
 
 
     neand_ages = 2 * [125000] + 2 * [90000] + 2 * [55000]
@@ -274,16 +206,13 @@ if __name__ == "__main__":
     # process the simulations into different tables of SNPs
     all_snps = sim.get_all_snps(ts, sim.all_inds(pop_params))
 
+
+    if args.vcf:
+        ts.write_vcf(open(f"{args.output_prefix}.vcf", 'w'), args.vcf_ploidy )
     # save all simulated SNPs in a tabular format
     if args.snps:
         all_snps.to_csv(f"{args.output_prefix}_snps.tsv", sep="\t", index_label="pos")
 
-    if args.admixfrog:
-        print("storing admixfrog")
-        admixfrog_input(all_snps, 
-                        coverage = args.coverage, 
-                        contamination = args.contamination,
-                        prefix = args.output_prefix)
 
     # detect admixture tracts for each pair of source-target populations
     for from_pop, to_pop in args.introgression:
@@ -293,11 +222,32 @@ if __name__ == "__main__":
             to_pop=pop_params[to_pop]["id"]
         )
 
-        if not haplotypes: continue
 
-        ind_ids = [f"{to_pop}{i}" for i, _ in enumerate(ts.samples(pop_params[to_pop]["id"]))]
-        for i, name in zip(haplotypes.keys(), ind_ids):
-            haplotypes[i].to_csv(f"{args.output_prefix}_{name}_{from_pop}_haplotypes.tsv", sep="\t", index=False)
+        sample_ids = ts.samples(pop_params[to_pop]["id"])
+        hap_df = pd.concat(haplotypes, axis=0).reset_index(level=0)
+        hap_df['sample']=all_snps.columns[hap_df.level_0]
+        hap_df.rename({'level_0':'id'}, axis=1, inplace=True)
+        hap_df['diploid_id'] = (hap_df['id'] - sample_ids[0]) // 2
+        hap_df['hap_id'] = (hap_df['id'] - sample_ids[0])
+        hap_df['nea_gf'] = args.neand[0]
+        hap_df['sample_time'] = np.array(eur_ages)[np.array(hap_df['hap_id'])]
+
+        hap_df.to_csv(f"{args.output_prefix}_{from_pop}_haplotypes.tsv", sep="\t", index=False)
+
+        if not haplotypes: continue
+        ind_ids = [f"{to_pop}{i}" for i, _ in enumerate(sample_ids)]
+        for i, name in zip(sample_ids, ind_ids):
+            if i in haplotypes:
+                haplotypes[i]['sample'] = name
+                haplotypes[i].to_csv(f"{args.output_prefix}_{name}_{from_pop}_haplotypes.tsv", sep="\t", index=False)
+
+
+    if args.admixfrog:
+        print("storing admixfrog")
+        admixfrog_input(all_snps, 
+                        coverage = args.coverage, 
+                        contamination = args.contamination,
+                        prefix = args.output_prefix)
 
     # calculate a specified set of admixture statistics
     if args.stats:

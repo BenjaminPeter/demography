@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import binom, poisson
-def admixfrog_input(snps, coverage, contamination, prefix='admixfrog'):
+def admixfrog_input(snps,  coverage, contamination,chrom='1', prefix='admixfrog'):
     snps['pos'] = snps.index.astype(int)
     snps2 = snps.drop_duplicates(subset=['pos'])
     afr_cols = [col for col in snps2.columns if col.startswith("afr")] 
@@ -9,7 +9,7 @@ def admixfrog_input(snps, coverage, contamination, prefix='admixfrog'):
     eur_cols = [col for col in snps2.columns if col.startswith("eur")] 
     n_afr, n_asn, n_eur = len(afr_cols), len(asn_cols), len(eur_cols)
     D = dict()
-    D['chrom'] = '1'
+    D['chrom'] = chrom
     D['pos']=snps2.index.astype(int)
     D['map']=snps2.index / 1e6
     D['ref']='A'
@@ -29,7 +29,8 @@ def admixfrog_input(snps, coverage, contamination, prefix='admixfrog'):
         D["ASN_alt"] = np.sum(snps2[asn_cols], 1)
         D["ASN_ref"] = n_asn - D['ASN_alt']
     ref = pd.DataFrame.from_dict(D)
-    ref.to_csv(f"{prefix}.panel.xz", float_format="%.5f", index=False, compression="xz")
+    #ref.to_csv(f"{prefix}.panel.xz", float_format="%.5f", index=False, compression="xz")
+    ref.to_csv(f"{prefix}.panel.txt", float_format="%.5f", index=False)
 
     n_libs = len(coverage)
     assert len(contamination) == n_libs
@@ -73,7 +74,7 @@ def admixfrog_sample(ids, ref, snps2, coverage, contamination, libs, name, prefi
         data = data[data.tref+data.talt>0]
         S.append(data)
     data = pd.concat(S).sort_values(['chrom', 'pos', 'map', 'lib'])
-    data.to_csv(f"{prefix}.{name}.sample.xz", float_format="%.5f", index=False, compression="xz")
+    data.to_csv(f"{prefix}.{name}.sample.txt", float_format="%.5f", index=False)
 
 debug_str = ""\
 "--neand 55000,25,0,0.03 "\

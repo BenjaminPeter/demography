@@ -24,7 +24,7 @@ def sample_ages(ages):
 
 
 
-def simulate(neand, eurA, eurB, afr, pop_params, seq_len, debug):
+def simulate(neand, eurA, eurB, afr, pop_params, seq_len, rec, debug):
     id_chimp, id_neand, id_afrA, id_afrB, id_eur, id_asn = \
         [pop_params[p]["id"] for p in pop_params]
 
@@ -81,6 +81,10 @@ def simulate(neand, eurA, eurB, afr, pop_params, seq_len, debug):
     # effective population sizes
     Ne0 = 10000
 
+    #
+    if rec is not None:
+        rmap = msp.RecombinationMap.read_hapmap(rec)
+
     if debug:
         print("Population identifiers:")
         for p, i in pop_params.items():
@@ -93,10 +97,11 @@ def simulate(neand, eurA, eurB, afr, pop_params, seq_len, debug):
         sys.exit()
     else:
         return msp.simulate(
-            length=seq_len,
             Ne=Ne0,
             mutation_rate=1e-8,
-            recombination_rate=1e-8,
+            length=seq_len if rec is None else None,
+            recombination_rate=1e-8 if rec is None else None,
+            recombination_map = None if rec is None else rmap,
             samples=samples,
             population_configurations=pop_config,
             demographic_events=demography,
@@ -157,30 +162,25 @@ if __name__ == "__main__":
     parser.add_argument("--introgression", nargs="*", type=pair_type, metavar="from-to",
                         help="Pairs of populations for introgression detection")
     parser.add_argument("--snps", action="store_true", help="Save all SNPs to a file")
+    parser.add_argument("--writesnps", action="store_true", help="""
+                        write all SNPs to a file in a memory efficient manner.
+                        this will disable generation of the all_snps table used for 
+                        e.g. stats calculations
+                        """)
     parser.add_argument("--stats", nargs="+",
                         choices=["true_neand", "asc_neand", "indirect", "direct", "afr_f4"],
                         help="Which statistics to calculate?")
 
     parser.add_argument("--output-prefix", metavar="FILE", help="Prefix of output files")
-    parser.add_argument("--vcf", action='store_true', default=False, help="write vcf file with ploidy VCF")
-    parser.add_argument("--vcf-ploidy", type=int, default=2, help="ploidy for vcf")
 
     parser.add_argument("--debug", action="store_true", help="Debug info")
-    afparse = parser.add_argument_group('admixfrog', """options for admixfrog output.
-                                        will require coverage, contamination for each
-                                        library. By default, contamination is generated
-                                        from Asians; and all europeans are considered
-                                        samples.
-                                       """)
-    afparse.add_argument("--admixfrog", action='store_true', default=False,
-                         help='generate admixfrog format output')
-    afparse.add_argument("--coverage", nargs="*", type=float,
-                        help="coverage per library. should be the same legth as contamination")
-    afparse.add_argument("--contamination", nargs="*", type=float,
-                        help="proportion of reads that are of contaminant origin")
+    parser.add_argument("--chrom", default='1', 
+                        help="chromosome id for admixfrog output")
+    parser.add_argument("--rec", default=None, 
+                        help="file with recombination map")
 
-    args = parser.parse_args(debug_str)
-    #args = parser.parse_args()
+    #args = parser.parse_args(debug_str)
+    args = parser.parse_args()
 
 
     neand_ages = 2 * [125000] + 2 * [90000] + 2 * [55000]
@@ -201,53 +201,58 @@ if __name__ == "__main__":
 
     # simulate the data
     ts = simulate(args.neand, args.eurA, args.eurB, args.afr,
-                  pop_params, args.seq_len, args.debug)
+                  pop_params, args.seq_len, args.rec, args.debug)
 
-    # process the simulations into different tables of SNPs
-    all_snps = sim.get_all_snps(ts, sim.all_inds(pop_params))
-
-
-    if args.vcf:
-        ts.write_vcf(open(f"{args.output_prefix}.vcf", 'w'), args.vcf_ploidy )
-    # save all simulated SNPs in a tabular format
-    if args.snps:
-        all_snps.to_csv(f"{args.output_prefix}_snps.tsv", sep="\t", index_label="pos")
-
+    sample_names = np.array(sim.all_inds(pop_params))
 
     # detect admixture tracts for each pair of source-target populations
-    for from_pop, to_pop in args.introgression:
-        haplotypes = introgression.get_introgressed(
-            ts,
-            from_pop=pop_params[from_pop]["id"],
-            to_pop=pop_params[to_pop]["id"]
-        )
+    if args.introgression is not None:
+        for from_pop, to_pop in args.introgression:
+            haplotypes = introgression.get_introgressed(
+                ts,
+                from_pop=pop_params[from_pop]["id"],
+                to_pop=pop_params[to_pop]["id"]
+            )
 
+            sample_ids = ts.samples(pop_params[to_pop]["id"])
+            if len(haplotypes) > 0:
+                hap_df = pd.concat(haplotypes, axis=0).reset_index(level=0)
+                hap_df['chrom'] = args.chrom
+                hap_df['start'] = hap_df['start'].astype(int)
+                hap_df['end'] = hap_df['end'].astype(int)
+                hap_df['sample'] = sample_names[hap_df.level_0]
+                hap_df.rename({'level_0': 'id'}, axis=1, inplace=True)
+                hap_df['diploid_id'] = (hap_df['id'] - sample_ids[0]) // 2
+                hap_df['hap_id'] = (hap_df['id'] - sample_ids[0])
+                hap_df['sample_time'] = np.array(eur_ages)[np.array(hap_df['hap_id'])]
+                hap_df.to_csv(f"{args.output_prefix}_{from_pop}_haplotypes.tsv.gz", 
+                              sep="\t", index=False, compression="gzip")
+            else: 
+                hap_df = pd.DataFrame(columns=['id','start','end','chrom','sample','diploid_id','hap_id', 'sample_time'])
+                hap_df.to_csv(f"{args.output_prefix}_{from_pop}_haplotypes.tsv.gz", 
+                              sep="\t", index=False, compression="gzip")
+    else: 
+        hap_df = pd.DataFrame(columns=['id','start','end','chrom','sample','diploid_id','hap_id', 'sample_time'])
 
-        sample_ids = ts.samples(pop_params[to_pop]["id"])
-        hap_df = pd.concat(haplotypes, axis=0).reset_index(level=0)
-        hap_df['sample']=all_snps.columns[hap_df.level_0]
-        hap_df.rename({'level_0':'id'}, axis=1, inplace=True)
-        hap_df['diploid_id'] = (hap_df['id'] - sample_ids[0]) // 2
-        hap_df['hap_id'] = (hap_df['id'] - sample_ids[0])
-        hap_df['nea_gf'] = args.neand[0]
-        hap_df['sample_time'] = np.array(eur_ages)[np.array(hap_df['hap_id'])]
+        hap_df.to_csv(f"{args.output_prefix}_neand_haplotypes.tsv.gz", 
+                      sep="\t", index=False, compression="gzip")
 
-        hap_df.to_csv(f"{args.output_prefix}_{from_pop}_haplotypes.tsv", sep="\t", index=False)
+    # process the simulations into different tables of SNPs
+    if args.writesnps:
+        sim.write_all_snps(f"{args.output_prefix}_snps.tsv.gz",
+                           ts,
+                           sim.all_inds(pop_params),
+                           chrom=args.chrom)
+        quit()
+    else:
+        all_snps = sim.get_all_snps(ts, sample_names)
 
-        if not haplotypes: continue
-        ind_ids = [f"{to_pop}{i}" for i, _ in enumerate(sample_ids)]
-        for i, name in zip(sample_ids, ind_ids):
-            if i in haplotypes:
-                haplotypes[i]['sample'] = name
-                haplotypes[i].to_csv(f"{args.output_prefix}_{name}_{from_pop}_haplotypes.tsv", sep="\t", index=False)
-
-
-    if args.admixfrog:
-        print("storing admixfrog")
-        admixfrog_input(all_snps, 
-                        coverage = args.coverage, 
-                        contamination = args.contamination,
-                        prefix = args.output_prefix)
+    # save all simulated SNPs in a tabular format
+    if args.snps:
+        all_snps['chrom'] = args.chrom
+        all_snps.to_csv(f"{args.output_prefix}_snps.tsv.gz", 
+                        compression="gzip", sep="\t", index_label="pos")
+        del all_snps['chrom']
 
     # calculate a specified set of admixture statistics
     if args.stats:
@@ -255,8 +260,8 @@ if __name__ == "__main__":
         afrB = [f"afrB{i}" for i in range(args.nafrB)]
         altai, chag, vindija = ["neand0", "neand1"], ["neand2", "neand3"], ["neand4", "neand5"]
 
-        admix_snps = sim.get_asc_snps(all_snps, altai, afrA)
-        true_snps = sim.get_true_snps(ts, all_snps, pop_params)
+        admix_snps = sim.get_asc_snps(all_snps, altai, afrA)    #  ASCERTAINMENT PANEL FOR ARCHAIC ADMIXTURE
+        true_snps = sim.get_true_snps(ts, all_snps, pop_params) #  Truly introgressed SNP
 
         df = defaultdict(list)
         for s in samples.name:
@@ -270,4 +275,6 @@ if __name__ == "__main__":
 
         final_df = pd.merge(samples, df, on="name")
 
-        final_df.to_csv(f"{args.output_prefix}_stats.tsv", sep="\t", index=False)
+        final_df.to_csv(f"{args.output_prefix}_stats.tsv.gz", 
+                        compression="gzip",
+                        sep="\t", index=False)

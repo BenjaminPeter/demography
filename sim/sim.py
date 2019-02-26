@@ -4,11 +4,27 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 import msprime as msp
+import gzip
 
 from . import stats
 
 def years_to_gen(years, gen_time=25):
     return int(years / gen_time)
+
+def write_all_snps(file_name, ts, samples, chrom='1'):
+    """Write genotype matrix to file. 
+
+    More memory efficient than get_all_snps as it iterates over the
+    tree sequence directly.
+    
+    """
+    with gzip.open(file_name, 'wt') as f:
+        f.write("chrom\tpos\t")
+        f.write("\t".join(samples))
+        f.write("\n")
+        for v in ts.variants():
+            gt = '\t'.join(str(gt) for gt in v.genotypes)
+            f.write(f"{chrom}\t{int(v.site.position)}\t{gt}\n")
 
 
 def get_all_snps(ts, samples):

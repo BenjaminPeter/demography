@@ -12,9 +12,11 @@ usage: demography.py [-h] [--eurA start,duration,rate1,rate2]
                      SEQ_LEN
                      (--eur-ages EUR_AGES [EUR_AGES ...] | --neur NEUR)
                      [--nasn NASN] [--nafrA NAFRA] [--nafrB NAFRB]
-                     [--introgression from-to] [--snps]
+                     [--introgression [from-to [from-to ...]]] [--snps]
+                     [--writesnps]
                      [--stats {true_neand,asc_neand,indirect,direct,afr_f4} [{true_neand,asc_neand,indirect,direct,afr_f4} ...]]
-                     [--output-prefix FILE] [--debug]
+                     [--output-prefix FILE] [--debug] [--chrom CHROM]
+                     [--rec REC]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -35,11 +37,15 @@ optional arguments:
   --nasn NASN           Number of Asian chromosomes to simulate
   --nafrA NAFRA         Number of AfrA chromosomes to simulate
   --nafrB NAFRB         Number of AfrB chromosomes to simulate
-  --introgression from-to
-                        Pair of populations for introgression detection
+  --introgression [from-to [from-to ...]]
+                        Pairs of populations for introgression detection
   --snps                Save all SNPs to a file
+  --writesnps           write all SNPs to a file in a memory efficient manner.
+                        this will disable generation of the all_snps table
+                        used for e.g. stats calculations
   --stats {true_neand,asc_neand,indirect,direct,afr_f4} [{true_neand,asc_neand,indirect,direct,afr_f4} ...]
                         Which statistics to calculate?
   --output-prefix FILE  Prefix of output files
   --debug               Debug info
-```
+  --chrom CHROM         chromosome id for admixfrog output
+  --rec REC             file with recombination map
